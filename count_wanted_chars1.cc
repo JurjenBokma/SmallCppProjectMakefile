@@ -1,10 +1,7 @@
+#include "ddetect_utils.hh"
 #include <fstream>
 #include <limits>
 #include <string>
-
-enum : std::size_t {
-    ERR_NOT_COUNTED = std::numeric_limits<std::size_t>::max()
-};
 
 using namespace std;
 

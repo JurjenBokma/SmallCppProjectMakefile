@@ -1,23 +1,7 @@
+#include "ddetect_utils.hh"
 #include <limits>
 #include <string>
 #include <istream>
-
-enum {
-    ERR_SUCCESS = 0,
-    ERR_USAGE,
-    ERR_NOT_OPEN,
-    ERR_NOT_READ,
-    ERR_COUNTING_FAIL
-};
-
-enum : std::size_t {
-    ERR_NOT_COUNTED = std::numeric_limits<std::size_t>::max()
-};
-
-int error(std::string const &msg, int retval);
-std::size_t count_wanted_chars(std::string const &filename,
-                               std::string const &wanted_chars);
-void output_count(std::string const &name, size_t count);
 
 using namespace std;
 

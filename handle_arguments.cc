@@ -1,23 +1,7 @@
+#include "ddetect_utils.hh"
 #include <string>
 
 using namespace std;
-
-enum {
-    ERR_SUCCESS = 0,
-    ERR_USAGE,
-    ERR_NOT_OPEN,
-    ERR_NOT_READ,
-    ERR_COUNTING_FAIL
-};
-
-struct ArgConclusions
-{
-    bool need_usage;
-    string wanted_chars;
-    size_t nr_files;
-    char const * const * first_filename;
-    int exit_code;
-};
 
 ArgConclusions handle_arguments(int argc, char **argv)
 {
