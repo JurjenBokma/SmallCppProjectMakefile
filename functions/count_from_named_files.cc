@@ -1,9 +1,4 @@
-#include "ddetect_utils.hh"
-#include <limits>
-#include <string>
-#include <istream>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 int count_from_named_files(char const * const *first_filename,
                            size_t nr_files,

@@ -1,21 +1,10 @@
-#include <iostream>
-#include <limits>
-#include <sstream>
+#include "../project.ih"
 
-enum : bool
+enum
 {
-    FAILURE = false,
-    SUCCESS = true
+    SUCCESS = 0,
+    FAILURE
 };
-
-enum : std::size_t {
-    ERR_NOT_COUNTED = std::numeric_limits<std::size_t>::max()
-};
-
-using namespace std;
-
-std::size_t count_wanted_chars(std::istream &input, std::string const &wanted_chars);
-
 
 int main()
 {

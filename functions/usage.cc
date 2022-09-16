@@ -1,7 +1,4 @@
-#include "ddetect_utils.hh"
-#include <iostream>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 int usage(int retval)
 {

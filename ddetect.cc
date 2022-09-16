@@ -1,6 +1,6 @@
 /// Program to count chars in files.
 
-#include "ddetect_utils.hh"
+#include "project.ih"
 
 
 int main(int argc, char **argv)

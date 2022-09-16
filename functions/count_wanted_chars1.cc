@@ -1,9 +1,4 @@
-#include "ddetect_utils.hh"
-#include <fstream>
-#include <limits>
-#include <string>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 std::size_t count_wanted_chars(std::istream &input, std::string const &wanted_chars)
 {

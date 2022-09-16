@@ -1,7 +1,4 @@
-#include "ddetect_utils.hh"
-#include <string>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 ArgConclusions handle_arguments(int argc, char **argv)
 {

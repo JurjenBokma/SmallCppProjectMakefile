@@ -1,8 +1,4 @@
-#include "ddetect_utils.hh"
-#include <iostream>
-#include <string>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 void output_count(std::string const &name,
                   size_t count)

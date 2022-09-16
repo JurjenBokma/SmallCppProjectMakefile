@@ -1,9 +1,4 @@
-#include "ddetect_utils.hh"
-#include <iostream>
-#include <limits>
-#include <string>
-
-using namespace std;
+#include "ddetect_utils.ih"
 
 int count_from_stdin(string const &wanted_chars)
 {
