@@ -8,7 +8,15 @@ enum
 
 int main()
 {
-    istringstream test_input("This is a journey into C++!\n");
-    return
-        count_wanted_chars(test_input, "aeiou") == 9 ? SUCCESS : FAILURE;
+    std::string const text = "This is a journey into C++!";
+
+    istringstream test_input(text);
+    size_t const counted = count_wanted_chars(test_input, "aeiou");
+    
+    if (counted == 8)
+        return SUCCESS;
+    cerr << "Error in count_wanted_chars:\n"
+        "We expected nine vowels (not counting the 'y')"
+        " in the text \"" << text << "\", but found " << counted << '\n';
+    return FAILURE;
 }
