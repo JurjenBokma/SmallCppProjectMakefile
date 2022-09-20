@@ -1,4 +1,4 @@
-#include "ddetect_utils.ih"
+#include "cw.ih"
 
 int count_from_stdin(string const &wanted_chars)
 {

@@ -1,4 +1,4 @@
-#include "ddetect_utils.ih"
+#include "cw.ih"
 
 std::size_t count_wanted_chars(std::string const &filename,
                          std::string const &wanted_chars)

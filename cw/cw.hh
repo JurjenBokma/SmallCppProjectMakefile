@@ -1,6 +1,8 @@
 #ifndef def_33b1ce7c_3466_11ed_8f4d_dfa221b644d4_ddetect_utils_hh
 #define def_33b1ce7c_3466_11ed_8f4d_dfa221b644d4_ddetect_utils_hh
 
+/// Functions that count wanted chars in streams or files.
+
 #include <istream>
 #include <limits>
 #include <string>
@@ -19,9 +21,6 @@ enum : std::size_t {
 
 using namespace std;
 
-// Display usage info and pass on retval.
-int usage(int retval);
-
 // Display msg, returning retval.
 int error(std::string const &msg, int retval);
 
@@ -31,17 +30,6 @@ std::size_t count_wanted_chars(std::istream &input, std::string const &wanted_ch
 
 std::size_t count_wanted_chars(std::string const &filename,
                                std::string const &wanted_chars);
-
-struct ArgConclusions
-{
-    bool need_usage;
-    string wanted_chars;
-    size_t nr_files;
-    char const * const * first_filename;
-    int exit_code;
-};
-
-ArgConclusions handle_arguments(int argc, char **argv);
 
 void output_count(std::string const &name,
                   size_t count);

@@ -1,7 +1,21 @@
-#include "functions/ddetect_utils.hh"
+#include "cw/cw.hh"
 
 #include <iostream>
 #include <limits>
 #include <sstream>
 
 using namespace std;
+
+// Display usage info and pass on retval.
+int usage(int retval);
+
+struct ArgConclusions
+{
+    bool need_usage;
+    string wanted_chars;
+    size_t nr_files;
+    char const * const * first_filename;
+    int exit_code;
+};
+
+ArgConclusions handle_arguments(int argc, char **argv);
