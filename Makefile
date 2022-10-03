@@ -2,7 +2,7 @@
 
 # Hand-made Makefile to build small C++ projects.
 
-define HELP_TEXT
+define HELP_TEXT :=
 
     This Makefile is suitable for small C++ projects.
     It assumes a GNU C++ compiler, and GNU Make.
@@ -12,22 +12,19 @@ define HELP_TEXT
         make
         make clean
 
-    To build the project using this Makefile, 'make' does the following:
-    - Analyze all source and internal header files for dependencies,
-      and include the generated dependency files as Makefile snippets.
-    - Want to compile all program sources, i.e. the ones in which a 'main'
-      function is detected. Want to link them against the convenience library.
-      If there are no program sources, want to build the convenience library
-      anyway.
-    - In order to build the convenience library, first want to compile all
-      non-program sources, i.e. the ones without a 'main' function, into
-      object files.
-    - If any source files include internal headers, want to precompile those
-      internal headers into precompiled headers before compiling the sources.
+    When this Makefile is used, 'make' wants to build programs, or if there
+    are no programs, the convenience library.
 
-    This results in precompiled headers being built first, then object files,
-    and then executables. Once the project is built, subsequent runs of 'make'
-    will only rebuild what is necessary.
+    It detects program sources by grepping for a 'main' function, and it
+    compiles them into object files. The object files of all other (i.e.
+    non-program) sources go into the convenience library.
+
+    The Makefile detects includes, so if a source file includes an internal
+    header, the internal header is compiled into a precompiled header before
+    the source file is compiled into an object file.
+
+    To finally produce the program, the program object is linked against the
+    convenience library.
 
     The Makefile accepts the usual environment variables, like CXX, CXXFLAGS,
     CPPFLAGS, in the usual ways:
@@ -45,7 +42,7 @@ define HELP_TEXT
              make CXXFLAGS=-O2
 
     Additional variables, like CXX_SOURCE_EXTENSION, CXX_HEADER_EXTENSION etc.
-    are also used, and can be changed by the same methods.
+    are also used, and can be changed in the same ways.
 
     Some variables change the behaviour more extensively:
 
@@ -53,7 +50,7 @@ define HELP_TEXT
     DEP=no      causes dependency analysis to be skipped.
     PCH=no      prevents precompiled headers from being built.
 
-    Note that already existing dependency files or precompiled headers may
+    Note that already-existing dependency files or precompiled headers may
     still get used. So before disabling dependency analysis or precompiled
     headers, a make clean is warranted.
 
@@ -61,6 +58,8 @@ define HELP_TEXT
     source file includes which internal header, so it will not create or
     update precompiled headers.
 
+    This Makefile works with Parallel Make (e.g. make -j4), but the feature is
+    not well-tested.
 
 endef
 
@@ -94,9 +93,6 @@ CONVLIB = libproj.a
 
 # Directory where dependencies are stored.
 DEPDIR ?= generated_deps
-
-# Library constructor
-AR ?= ar
 
 ## No editing below this line unless you know what you're doing. ##
 
@@ -144,7 +140,6 @@ deps_of = $(addprefix $(DEPDIR)/,$(addsuffix .$(DEP_EXTENSION),$(1)))
 CXX_SOURCES = $(filter %.$(CXX_SOURCE_EXTENSION),$(ALL_FILES))
 # Get object names by replacing the extension.
 CXX_OBJECTS = $(CXX_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%.$(CXX_OBJECT_EXTENSION))
-
 CXX_SOURCE_DEPS = $(call deps_of,$(CXX_SOURCES))
 
 # To detect a main() function in a source file.
@@ -190,7 +185,7 @@ $(CXX_PROGS): LDFLAGS += -L. -lproj
 $(CXX_OBJECTS): ACTION = Compiling
 $(CXX_OBJECTS): CXXFLAGS += -c
 
-$(CONVLIB): ACTION = Gathering
+$(CONVLIB): ACTION = Collecting
 
 $(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
 # When compiling a precompiled header, specify that it's a header.
@@ -207,6 +202,11 @@ $(CONVLIB): $(CXX_NONPROG_OBJECTS)
 # In the recipe of the rule,
 # $@ is the target, i.e. $(CONVLIB)
 # $^ is the list of preprequisites, i.e. $(CXX_NONPROG_OBJECTS)
+
+# We don't archive object files member my member, because
+# 1. the member is a transient prerequisite that causes remakes,
+# 2. allegedly it's slower on large projects,
+# 3. the individual archiving actions clutter our output.
 
 # Pattern rule:
 # If any program object file is newer than the program itself,
@@ -229,13 +229,14 @@ clean: mostlyclean
 	$(QUIET) rm -f $(CXX_PROGS)
 
 # Even if some jerk creates a file called: 'clean', 'make clean' keeps working.
-.PHONY: clean mostlyclean test
+.PHONY: all clean mostlyclean test help
 
 # Don't create unless needed.
 .INTERMEDIATE: $(CXX_OBJECTS) $(CXX_PRECOMPILED_HEADERS)
 
 # Once created, don't delete unless by make clean.
-.SECONDARY: $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS)
+.SECONDARY: $(CXX_PRECOMPILED_HEADERS)
+#$(CXX_OBJECTS)
 # Keep object files around too, to rebuild the library.
 
 help:
@@ -356,19 +357,24 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
 endif
 
+### Some measures to help Parallel Make ( make --jobs n) ###
+
 # Make does not canonicalize relative paths in generated dependencies. As a
 # result it may want to make foo/../bar.ih.gch,
 # which can when simplified reads:  bar.ih.gch.
+# With Parallel Make this is more often a problem.
 # To mitigate, we tell Make how to remove the /../ from paths:
-define SUBDIR_INCLUSION_RECIPE
+define PATH_STRAIGHTENING_RECIPE
 $(DIR)../%: $(patsubst ./%,%,$(dir $(DIR:%/=%))%)
 	@echo "    [ Substituting \"$$<\" <- \"$$@\": same file by straightened path. ]"
 endef
 
-# Evaluating this recipe for all available dirs.
+# Evaluating the paths straightening recipe for all available dirs.
 DIRECTORIES_FOUND = $(sort $(filter-out ./,$(dir $(ALL_FILES:./%=%))))
-#$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(SUBDIR_INCLUSION_RECIPE)))
-$(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(SUBDIR_INCLUSION_RECIPE)))
+#$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(PATH_STRAIGHTENING_RECIPE)))
+$(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(PATH_STRAIGHTENING_RECIPE)))
+
+### End of Parallel Make measures. ###
 
 # Postpone double expansion to as late as possible.
 .SECONDEXPANSION:
