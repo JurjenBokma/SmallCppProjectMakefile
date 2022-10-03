@@ -1,5 +1,69 @@
 #!/usr/bin/make
 
+# Hand-made Makefile to build small C++ projects.
+
+define HELP_TEXT
+
+    This Makefile is suitable for small C++ projects.
+    It assumes a GNU C++ compiler, and GNU Make.
+
+    Its most basic uses are:
+
+        make
+        make clean
+
+    To build the project using this Makefile, 'make' does the following:
+    - Analyze all source and internal header files for dependencies,
+      and include the generated dependency files as Makefile snippets.
+    - Want to compile all program sources, i.e. the ones in which a 'main'
+      function is detected. Want to link them against the convenience library.
+      If there are no program sources, want to build the convenience library
+      anyway.
+    - In order to build the convenience library, first want to compile all
+      non-program sources, i.e. the ones without a 'main' function, into
+      object files.
+    - If any source files include internal headers, want to precompile those
+      internal headers into precompiled headers before compiling the sources.
+
+    This results in precompiled headers being built first, then object files,
+    and then executables. Once the project is built, subsequent runs of 'make'
+    will only rebuild what is necessary.
+
+    The Makefile accepts the usual environment variables, like CXX, CXXFLAGS,
+    CPPFLAGS, in the usual ways:
+        - exported:
+
+              export CXX=g++-12
+              make
+
+        - set on the command line:
+
+              CXXFLAGS=-Wall make
+
+        - or overridden in a command line argument to 'make':
+
+             make CXXFLAGS=-O2
+
+    Additional variables, like CXX_SOURCE_EXTENSION, CXX_HEADER_EXTENSION etc.
+    are also used, and can be changed by the same methods.
+
+    Some variables change the behaviour more extensively:
+
+    VERBOSE=yes causes some commands from recipes to be echoed.
+    DEP=no      causes dependency analysis to be skipped.
+    PCH=no      prevents precompiled headers from being built.
+
+    Note that already existing dependency files or precompiled headers may
+    still get used. So before disabling dependency analysis or precompiled
+    headers, a make clean is warranted.
+
+    Also note that without analyzing dependencies, Make will not know which
+    source file includes which internal header, so it will not create or
+    update precompiled headers.
+
+
+endef
+
 # We recognize files by their extensions, because file magic doesn't always
 # work to distinguish C++ from C.
 
@@ -15,7 +79,7 @@ DEP_EXTENSION ?= dep
 
 # By default, this Makefile does not echo recipe commands. But it can.
 # Try: 'make VERBOSE=1'
-QUIET = $(if $(filter true,$(call boolalpha,$(VERBOSE))),,@)
+VERBOSE ?= false
 
 # We use precompiled headers by default. But they can be turned off.
 # Try: make PCH=no
@@ -51,7 +115,8 @@ boolalpha = $(or \
    $(error cannot interpret $(1) as boolean)\
 )
 
-# Don't write escaped newlines. Write normal recipes and escape newlines later.
+# We don't write escaped newlines.
+# Write normal recipes and escape newlines later.
 define NEWLINE
 
 
@@ -62,6 +127,9 @@ undefine PCH
 
 USE_GENERATED_DEPENDENCIES := $(call boolalpha,$(DEP))
 undefine DEP
+
+QUIET := $(if $(filter true,$(call boolalpha,$(VERBOSE))),,@)
+undefine VERBOSE
 
 # Recursive wildcard to find all files in the current directory and subdirs.
 # Using a $(shell find...) would also work, but depend on the find utility.
@@ -96,7 +164,7 @@ CXX_NONPROG_OBJECTS = $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENS
 # From every internal header we can build a precompiled (internal) header.
 CXX_INTERNAL_HEADERS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$(ALL_FILES))
 
-PRECOMPILED_HEADERS = $(patsubst %,%.gch,$(CXX_INTERNAL_HEADERS))
+CXX_PRECOMPILED_HEADERS = $(patsubst %,%.gch,$(CXX_INTERNAL_HEADERS))
 CXX_PCH_DEPS = $(call deps_of,$(CXX_INTERNAL_HEADERS))
 
 ###
@@ -110,7 +178,7 @@ CXX_PCH_DEPS = $(call deps_of,$(CXX_INTERNAL_HEADERS))
 ###
 
 # Default target: to make all programs.
-all: $(CXX_PROGS)
+all: $(CXX_PROGS) $(CONVLIB)
 
 # Assumption: all programs need the convenience library.
 $(CXX_PROGS): $(CONVLIB)
@@ -124,9 +192,9 @@ $(CXX_OBJECTS): CXXFLAGS += -c
 
 $(CONVLIB): ACTION = Gathering
 
-$(PRECOMPILED_HEADERS): ACTION = Pre-compiling
+$(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
 # When compiling a precompiled header, specify that it's a header.
-$(PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
+$(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
 # A rule says two things:
 # 1. To build any of the target, i.e. $(CONVLIB),
@@ -154,7 +222,7 @@ $(CXX_OBJECTS): %.$(CXX_OBJECT_EXTENSION): %.$(CXX_SOURCE_EXTENSION)
 
 # Clean everything except the programs.
 mostlyclean:
-	$(QUIET) rm -f $(DEP_FILES) $(PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB)
+	$(QUIET) rm -f $(DEP_FILES) $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB)
 
 # Remove everything Make created.
 clean: mostlyclean
@@ -164,22 +232,15 @@ clean: mostlyclean
 .PHONY: clean mostlyclean test
 
 # Don't create unless needed.
-.INTERMEDIATE: $(CXX_OBJECTS) $(PRECOMPILED_HEADERS)
+.INTERMEDIATE: $(CXX_OBJECTS) $(CXX_PRECOMPILED_HEADERS)
 
 # Once created, don't delete unless by make clean.
-.SECONDARY: $(PRECOMPILED_HEADERS) $(CXX_OBJECTS)
+.SECONDARY: $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS)
+# Keep object files around too, to rebuild the library.
 
-# To work without precompiled headers:
-# make PCH=no
-# or set PCH=no in the environment
-ifeq ($(USE_PRECOMPILED_HEADERS),true)
+help:
+	@printf '$(subst $(NEWLINE),\n,$(HELP_TEXT))'
 
-    # Each internal header shall become a precompiled header.
-    $(PRECOMPILED_HEADERS): %.$(CXX_PCH_EXTENSION): %.$(CXX_INTERNAL_HEADER_EXTENSION)
-	@echo "    [ $(ACTION) $@ <- $< ]"
-	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
-
-endif
 
 # Below follow come templates that will create source and header files.
 # Only files that don't exist can be created.
@@ -250,7 +311,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # Prevent dependency generation if MAKECMDGOALS is non-empty and consists
     # only of targets that don't need dependencies.
-    TARGETS_THAT_DONT_NEED_DEPS := clean mostlyclean depclean
+    TARGETS_THAT_DONT_NEED_DEPS := clean mostlyclean depclean help
     MAKECMDGOALS_IS_EMPTY := $(if $(MAKECMDGOALS),,yes)
     GOALS_THAT_NEED_DEPS := $(strip $(filter-out $(TARGETS_THAT_DONT_NEED_DEPS),$(MAKECMDGOALS)))
     NEED_DEP_INCLUDES := $(or $(MAKECMDGOALS_IS_EMPTY),$(GOALS_THAT_NEED_DEPS))
@@ -293,15 +354,37 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     .PHONY: depclean
 
-    # Postpone double expansion to as late as possible.
-    .SECONDEXPANSION:
+endif
 
-    ifeq ($(USE_PRECOMPILED_HEADERS),true)
+# Make does not canonicalize relative paths in generated dependencies. As a
+# result it may want to make foo/../bar.ih.gch,
+# which can when simplified reads:  bar.ih.gch.
+# To mitigate, we tell Make how to remove the /../ from paths:
+define SUBDIR_INCLUSION_RECIPE
+$(DIR)../%: $(patsubst ./%,%,$(dir $(DIR:%/=%))%)
+	@echo "    [ Substituting \"$$<\" <- \"$$@\": same file by straightened path. ]"
+endef
 
-        # For each internal header in the dependencies, add a precompiled header.
-        # (Leaving the internal header in is simpler and doesn't hurt.)
-        $(CXX_OBJECTS): $$(patsubst %.$(CXX_INTERNAL_HEADER_EXTENSION),%.$(CXX_PCH_EXTENSION),$$^)
+# Evaluating this recipe for all available dirs.
+DIRECTORIES_FOUND = $(sort $(filter-out ./,$(dir $(ALL_FILES:./%=%))))
+#$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(SUBDIR_INCLUSION_RECIPE)))
+$(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(SUBDIR_INCLUSION_RECIPE)))
 
-    endif
+# Postpone double expansion to as late as possible.
+.SECONDEXPANSION:
+
+# To work without precompiled headers:
+# make PCH=no
+# or set PCH=no in the environment
+ifeq ($(USE_PRECOMPILED_HEADERS),true)
+
+    # Each internal header shall become a precompiled header.
+    $(CXX_PRECOMPILED_HEADERS): %.$(CXX_PCH_EXTENSION): %.$(CXX_INTERNAL_HEADER_EXTENSION)
+	@echo "    [ $(ACTION) $@ <- $< ]"
+	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
+
+    # For each internal header in the dependencies, add a precompiled header.
+    # (Leaving the internal header in is simpler and doesn't hurt.)
+    $(CXX_OBJECTS): $$(patsubst %.$(CXX_INTERNAL_HEADER_EXTENSION),%.$(CXX_PCH_EXTENSION),$$^)
 
 endif
