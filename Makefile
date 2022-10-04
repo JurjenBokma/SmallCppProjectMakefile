@@ -1,7 +1,5 @@
 #!/usr/bin/make
 
-# Hand-made Makefile to build small C++ projects.
-
 define HELP_TEXT :=
 
     This Makefile is suitable for small C++ projects.
@@ -46,9 +44,9 @@ define HELP_TEXT :=
 
     Some variables change the behaviour more extensively:
 
-    VERBOSE=yes causes some commands from recipes to be echoed.
-    DEP=no      causes dependency analysis to be skipped.
-    PCH=no      prevents precompiled headers from being built.
+        VERBOSE=yes causes some commands from recipes to be echoed.
+        DEP=no      causes dependency analysis to be skipped.
+        PCH=no      prevents precompiled headers from being built.
 
     Note that already-existing dependency files or precompiled headers may
     still get used. So before disabling dependency analysis or precompiled
@@ -60,6 +58,15 @@ define HELP_TEXT :=
 
     This Makefile works with Parallel Make (e.g. make -j4), but the feature is
     not well-tested.
+
+    It can also make header, internal header and source files, preferably in
+    that order, from templates. E.g.:
+
+        mkdir mc
+        make mc/mc.hh
+        make mc/mc.ih
+        make mc/ctor1.cc
+
 
 endef
 
@@ -137,30 +144,31 @@ ALL_FILES := $(patsubst ./%,%,$(call rwildcard,.,*))
 deps_of = $(addprefix $(DEPDIR)/,$(addsuffix .$(DEP_EXTENSION),$(1)))
 
 # Anything with a CXX_SOURCE_EXTENSION is a C++ source file.
-CXX_SOURCES = $(filter %.$(CXX_SOURCE_EXTENSION),$(ALL_FILES))
+CXX_SOURCES := $(filter %.$(CXX_SOURCE_EXTENSION),$(ALL_FILES))
+
 # Get object names by replacing the extension.
-CXX_OBJECTS = $(CXX_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%.$(CXX_OBJECT_EXTENSION))
-CXX_SOURCE_DEPS = $(call deps_of,$(CXX_SOURCES))
+CXX_OBJECTS := $(CXX_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%.$(CXX_OBJECT_EXTENSION))
+CXX_SOURCE_DEPS := $(call deps_of,$(CXX_SOURCES))
 
 # To detect a main() function in a source file.
 # Not bulletproof, but KISS.
-MAIN_REGEX = int[[:space:]]+main[[:space:]]*\(
+MAIN_REGEX := int[[:space:]]+main[[:space:]]*\(
 
 # Anything that mentions a main function is a program source.
 CXX_PROG_SOURCES := $(shell grep -El '$(MAIN_REGEX)' $(CXX_SOURCES))
-CXX_PROG_OBJECTS = $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENSION),$(CXX_PROG_SOURCES))
-CXX_PROGS = $(patsubst %.$(CXX_SOURCE_EXTENSION),%,$(CXX_PROG_SOURCES))
-CXX_TESTPROGS = $(filter tests/%,$(CXX_PROGS))
+CXX_PROG_OBJECTS := $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENSION),$(CXX_PROG_SOURCES))
+CXX_PROGS := $(CXX_PROG_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%)
+CXX_TESTPROGS := $(filter tests/%,$(CXX_PROGS))
 
 # Sources that aren't program sources, are non-program sources.
-CXX_NONPROG_SOURCES = $(filter-out $(CXX_PROG_SOURCES),$(CXX_SOURCES))
-CXX_NONPROG_OBJECTS = $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENSION),$(CXX_NONPROG_SOURCES))
+CXX_NONPROG_SOURCES := $(filter-out $(CXX_PROG_SOURCES),$(CXX_SOURCES))
+CXX_NONPROG_OBJECTS := $(CXX_NONPROG_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%.$(CXX_OBJECT_EXTENSION))
 
 # From every internal header we can build a precompiled (internal) header.
-CXX_INTERNAL_HEADERS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$(ALL_FILES))
+CXX_INTERNAL_HEADERS := $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$(ALL_FILES))
 
-CXX_PRECOMPILED_HEADERS = $(patsubst %,%.gch,$(CXX_INTERNAL_HEADERS))
-CXX_PCH_DEPS = $(call deps_of,$(CXX_INTERNAL_HEADERS))
+CXX_PRECOMPILED_HEADERS := $(CXX_INTERNAL_HEADERS:%=%.gch)
+CXX_PCH_DEPS := $(call deps_of,$(CXX_INTERNAL_HEADERS))
 
 ###
 
@@ -172,7 +180,7 @@ CXX_PCH_DEPS = $(call deps_of,$(CXX_INTERNAL_HEADERS))
 
 ###
 
-# Default target: to make all programs.
+# Default target: to make all programs, or at least the convenience library.
 all: $(CXX_PROGS) $(CONVLIB)
 
 # Assumption: all programs need the convenience library.
@@ -188,6 +196,7 @@ $(CXX_OBJECTS): CXXFLAGS += -c
 $(CONVLIB): ACTION = Collecting
 
 $(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
+
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
@@ -208,7 +217,6 @@ $(CONVLIB): $(CXX_NONPROG_OBJECTS)
 # 2. allegedly it's slower on large projects,
 # 3. the individual archiving actions clutter our output.
 
-# Pattern rule:
 # If any program object file is newer than the program itself,
 # we rebuild the program, by linking the object file against the convenience library.
 $(CXX_PROGS): %: %.$(CXX_OBJECT_EXTENSION)
@@ -231,13 +239,12 @@ clean: mostlyclean
 # Even if some jerk creates a file called: 'clean', 'make clean' keeps working.
 .PHONY: all clean mostlyclean test help
 
-# Don't create unless needed.
+# Don't create unless needed:
 .INTERMEDIATE: $(CXX_OBJECTS) $(CXX_PRECOMPILED_HEADERS)
 
 # Once created, don't delete unless by make clean.
 .SECONDARY: $(CXX_PRECOMPILED_HEADERS)
 #$(CXX_OBJECTS)
-# Keep object files around too, to rebuild the library.
 
 help:
 	@printf '$(subst $(NEWLINE),\n,$(HELP_TEXT))'
@@ -248,7 +255,7 @@ help:
 # Use like: make bar.hh bar.ih foo.cc
 
 # We use a UUID to keep the header guard unique.
-define HEADER_TEMPLATE
+define CXX_HEADER_TEMPLATE
 #ifndef def_$(UUID)_$(HID)_$(CXX_HEADER_EXTENSION)
 #define def_$(UUID)_$(HID)_$(CXX_HEADER_EXTENSION)
 #endif //def_$(UUID)_$(HID)_$(CXX_HEADER_EXTENSION)\n
@@ -267,7 +274,7 @@ catch (...)
 endef
 
 
-define CXX_TEMPLATE
+define CXX_SOURCE_TEMPLATE
 $(include-internal-headers-in-same-dir)
 
 
@@ -276,7 +283,7 @@ endef
 include-headers-in-same-dir = $(foreach HEADER,$(wildcard $(@D)/*.$(CXX_HEADER_EXTENSION)),#include "$(notdir $(HEADER))"\n)
 include-internal-headers-in-same-dir = $(foreach IHEADER,$(wildcard $(@D)/*.$(CXX_INTERNAL_HEADER_EXTENSION)),#include "$(notdir $(IHEADER))"\n)
 
-define INTERNAL_HEADER_TEMPLATE
+define CXX_INTERNAL_HEADER_TEMPLATE
 $(include-headers-in-same-dir)
 
 using namespace std;\n
@@ -288,12 +295,18 @@ TEMPLATE_TYPES = $(patsubst %_TEMPLATE,%,$(TEMPLATES))
 TEMPLATABLE_EXTENSIONS = $(foreach TTYPE,$(TEMPLATE_TYPES),$($(TTYPE)_EXTENSION))
 TEMPLATABLE_GOALS = $(foreach EXTENSION,$(TEMPLATABLE_EXTENSIONS),$(filter %.$(EXTENSION),$(MAKECMDGOALS)))
 
+#$(info nonexistent goals: $(NONEXISTENT_GOALS))
+#$(info templates: $(TEMPLATES))
+#$(info template types: $(TEMPLATE_TYPES))
+#$(info templatable extensions: $(TEMPLATABLE_EXTENSIONS))
+#$(info templatable goals: $(TEMPLATABLE_GOALS))
+
 # Templatable goals can be made from a template, and are by definition nonexistent.
 ifneq (,$(TEMPLATABLE_GOALS))
 
-    %.cc: TEMPLATE = $(CXX_TEMPLATE)
-    %.ih: TEMPLATE = $(INTERNAL_HEADER_TEMPLATE)
-    %.hh: TEMPLATE = $(HEADER_TEMPLATE)
+    %.cc: TEMPLATE = $(CXX_SOURCE_TEMPLATE)
+    %.ih: TEMPLATE = $(CXX_INTERNAL_HEADER_TEMPLATE)
+    %.hh: TEMPLATE = $(CXX_HEADER_TEMPLATE)
     %.hh: UUID := $(subst -,_,$(shell uuid))
     %.hh: HID = $(basename $(notdir $@))
 
@@ -361,18 +374,18 @@ endif
 
 # Make does not canonicalize relative paths in generated dependencies. As a
 # result it may want to make foo/../bar.ih.gch,
-# which can when simplified reads:  bar.ih.gch.
-# With Parallel Make this is more often a problem.
+# which when simplified reads:      bar.ih.gch.
+# With Parallel Make this more often turns out to be a problem.
 # To mitigate, we tell Make how to remove the /../ from paths:
 define PATH_STRAIGHTENING_RECIPE
 $(DIR)../%: $(patsubst ./%,%,$(dir $(DIR:%/=%))%)
 	@echo "    [ Substituting \"$$<\" <- \"$$@\": same file by straightened path. ]"
 endef
 
-# Evaluating the paths straightening recipe for all available dirs.
+# Evaluating the path straightening recipe for all available dirs.
 DIRECTORIES_FOUND = $(sort $(filter-out ./,$(dir $(ALL_FILES:./%=%))))
-#$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(PATH_STRAIGHTENING_RECIPE)))
 $(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(PATH_STRAIGHTENING_RECIPE)))
+#$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(PATH_STRAIGHTENING_RECIPE)))
 
 ### End of Parallel Make measures. ###
 
@@ -381,7 +394,6 @@ $(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(PATH_STRAIGHTENING_RECIPE)))
 
 # To work without precompiled headers:
 # make PCH=no
-# or set PCH=no in the environment
 ifeq ($(USE_PRECOMPILED_HEADERS),true)
 
     # Each internal header shall become a precompiled header.
@@ -389,7 +401,7 @@ ifeq ($(USE_PRECOMPILED_HEADERS),true)
 	@echo "    [ $(ACTION) $@ <- $< ]"
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 
-    # For each internal header in the dependencies, add a precompiled header.
+    # For each internal header in the prerequisites, add a precompiled header.
     # (Leaving the internal header in is simpler and doesn't hurt.)
     $(CXX_OBJECTS): $$(patsubst %.$(CXX_INTERNAL_HEADER_EXTENSION),%.$(CXX_PCH_EXTENSION),$$^)
 
