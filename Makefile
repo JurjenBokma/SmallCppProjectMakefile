@@ -96,7 +96,8 @@ PCH ?= true
 DEP ?= true
 
 # The name of our convenience library.
-CONVLIB = libproj.a
+CONVLIB = $(notdir $(CURDIR))
+CONVLIB_FILE = lib$(CONVLIB).a
 
 # Directory where dependencies are stored.
 DEPDIR ?= generated_deps
@@ -173,7 +174,7 @@ CXX_PCH_DEPS := $(call deps_of,$(CXX_INTERNAL_HEADERS))
 ###
 
 # Could be used to suppress all built-in rules.
-#.SUFFIXES:
+.SUFFIXES:
 
 # Suppress making .o from .cc, because we only want to create .cc.o
 %.o: %.$(CXX_SOURCE_EXTENSION)
@@ -181,35 +182,37 @@ CXX_PCH_DEPS := $(call deps_of,$(CXX_INTERNAL_HEADERS))
 ###
 
 # Default target: to make all programs, or at least the convenience library.
-all: $(CXX_PROGS) $(CONVLIB)
+all: $(CXX_PROGS) $(CONVLIB_FILE)
 
 # Assumption: all programs need the convenience library.
-$(CXX_PROGS): $(CONVLIB)
+$(CXX_PROGS): $(CONVLIB_FILE)
 
 # To create an executable program is called: 'Linking'.
 $(CXX_PROGS): ACTION = Linking
-$(CXX_PROGS): LDFLAGS += -L. -lproj
+$(CXX_PROGS): LDFLAGS += -L. -l$(CONVLIB)
 
 $(CXX_OBJECTS): ACTION = Compiling
 $(CXX_OBJECTS): CXXFLAGS += -c
 
-$(CONVLIB): ACTION = Collecting
+$(CONVLIB_FILE): ACTION = Collecting
 
 $(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
 
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
+ECHO_ACTION = @echo "    [ $(ACTION) $@ <- $^ ]"
+
 # A rule says two things:
-# 1. To build any of the target, i.e. $(CONVLIB),
+# 1. To build any of the target, i.e. $(CONVLIB_FILE),
 #    we need the prerequisites, i.e. $(CXX_NONPROG_OBJECTS)
 # 2. If any of the preprequisites are newer than the target,
 #    we need to rebuild the target.
-$(CONVLIB): $(CXX_NONPROG_OBJECTS)
-	@echo "    [ $(ACTION) $@ <- $^ ]"
+$(CONVLIB_FILE): $(CXX_NONPROG_OBJECTS)
+	$(ECHO_ACTION)
 	$(QUIET) $(AR) rcs $@ $^
 # In the recipe of the rule,
-# $@ is the target, i.e. $(CONVLIB)
+# $@ is the target, i.e. $(CONVLIB_FILE)
 # $^ is the list of preprequisites, i.e. $(CXX_NONPROG_OBJECTS)
 
 # We don't archive object files member my member, because
@@ -220,17 +223,17 @@ $(CONVLIB): $(CXX_NONPROG_OBJECTS)
 # If any program object file is newer than the program itself,
 # we rebuild the program, by linking the object file against the convenience library.
 $(CXX_PROGS): %: %.$(CXX_OBJECT_EXTENSION)
-	@echo "    [ $(ACTION) $@ <- $^ ]"
+	$(ECHO_ACTION)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
 
 # If the source is newer than its object, we compile it.
 $(CXX_OBJECTS): %.$(CXX_OBJECT_EXTENSION): %.$(CXX_SOURCE_EXTENSION)
-	@echo "    [ $(ACTION) $@ <- $< ]"
+	$(ECHO_ACTION)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $<
 
 # Clean everything except the programs.
 mostlyclean:
-	$(QUIET) rm -f $(DEP_FILES) $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB)
+	$(QUIET) rm -f $(DEP_FILES) $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB_FILE)
 
 # Remove everything Make created.
 clean: mostlyclean
@@ -249,8 +252,7 @@ clean: mostlyclean
 help:
 	@printf '$(subst $(NEWLINE),\n,$(HELP_TEXT))'
 
-
-# Below follow come templates that will create source and header files.
+###  Below follow some templates that will create source and header files. ###
 # Only files that don't exist can be created.
 # Use like: make bar.hh bar.ih foo.cc
 
@@ -386,6 +388,19 @@ endef
 DIRECTORIES_FOUND = $(sort $(filter-out ./,$(dir $(ALL_FILES:./%=%))))
 $(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(PATH_STRAIGHTENING_RECIPE)))
 #$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(PATH_STRAIGHTENING_RECIPE)))
+
+
+### Checking for include guards ###
+
+CXX_HEADERS := $(filter %.$(CXX_HEADER_EXTENSION),$(ALL_FILES))
+
+include-guard-checks: $(CXX_HEADERS)
+	~/dev/bash/double-include-check $^
+
+.PHONY: include-guard-checks
+
+### End of include guard check ###
+
 
 ### End of Parallel Make measures. ###
 
