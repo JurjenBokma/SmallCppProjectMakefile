@@ -67,6 +67,11 @@ define HELP_TEXT :=
         make mc/mc.ih
         make mc/ctor1.cc
 
+    For making programs from template, the syntax is a bit diferent, as they
+    share their extension with ordinary source files. To make myprog.cc, say:
+
+        make myprog.cc:program
+
 
 endef
 
@@ -252,11 +257,39 @@ clean: mostlyclean
 help:
 	@printf '$(subst $(NEWLINE),\n,$(HELP_TEXT))'
 
-###  Below follow some templates that will create source and header files. ###
-# Only files that don't exist can be created.
-# Use like: make bar.hh bar.ih foo.cc
+#%:cxx_class: %:cxx_header %:cxx_internal_header
 
-# We use a UUID to keep the header guard unique.
+#%:cxx_header:
+
+#%:cxx_internal_header:
+
+# Making files from template is nice, but we can't safely tell Make to just
+# create any source file from scratch. There are too many cases where it may
+# need a file foo.bar, and decide that it can make one if it has foo.bar.cc,
+# so create that first.
+# So we only enable templates for files that don't exist yet.
+
+
+# The program source template shares its suffix with other sources.
+# So we use this trick: make foo.cc:program will create a program.
+ACTUAL_FILE = $(addsuffix .$(EXTENSION),$(patsubst %.$(EXTENSION),%,$*))
+
+%\:program: TEMPLATE = $(CXX_PROGRAM_TEMPLATE)
+%\:program: EXTENSION = $(CXX_SOURCE_EXTENSION)
+
+%\:program:
+	$(QUIET) if test -e "$(ACTUAL_FILE)" ; then echo "$(ACTUAL_FILE) already exists." ; false ; fi
+	$(QUIET) printf '$(subst $(NEWLINE),\n,$(TEMPLATE))' >> "$(ACTUAL_FILE)" && echo "$(ACTUAL_FILE) made from template"
+
+%\:cxx_class: %\:cxx_header %\:cxx_internal_header
+
+###  Below follow some templates that will create source and header files. ###
+
+# Only files that are explictly mentioned on the command line and that don't
+#exist yet, can be created. Use like: make bar.hh
+
+
+# Header template. We use a UUID to keep the header guard unique.
 define CXX_HEADER_TEMPLATE
 #ifndef def_$(UUID)_$(HID)_$(CXX_HEADER_EXTENSION)
 #define def_$(UUID)_$(HID)_$(CXX_HEADER_EXTENSION)
@@ -264,7 +297,25 @@ define CXX_HEADER_TEMPLATE
 endef
 
 
-define PROG_TEMPLATE
+# To detect (internal) headers that already exist in the dir.
+include-headers-in-same-dir = $(foreach HEADER,$(wildcard $(@D)/*.$(CXX_HEADER_EXTENSION)),#include "$(notdir $(HEADER))"\n)
+include-internal-headers-in-same-dir = $(foreach IHEADER,$(wildcard $(@D)/*.$(CXX_INTERNAL_HEADER_EXTENSION)),#include "$(notdir $(IHEADER))"\n)
+
+
+define CXX_INTERNAL_HEADER_TEMPLATE
+$(include-headers-in-same-dir)
+
+using namespace std;\n
+endef
+
+
+define CXX_SOURCE_TEMPLATE
+$(include-internal-headers-in-same-dir)
+
+
+endef
+
+define CXX_PROGRAM_TEMPLATE
 int main(int argc, char **argv)
 try
 {
@@ -276,32 +327,15 @@ catch (...)
 endef
 
 
-define CXX_SOURCE_TEMPLATE
-$(include-internal-headers-in-same-dir)
-
-
-endef
-
-include-headers-in-same-dir = $(foreach HEADER,$(wildcard $(@D)/*.$(CXX_HEADER_EXTENSION)),#include "$(notdir $(HEADER))"\n)
-include-internal-headers-in-same-dir = $(foreach IHEADER,$(wildcard $(@D)/*.$(CXX_INTERNAL_HEADER_EXTENSION)),#include "$(notdir $(IHEADER))"\n)
-
-define CXX_INTERNAL_HEADER_TEMPLATE
-$(include-headers-in-same-dir)
-
-using namespace std;\n
-endef
-
+# Giving Make a recipe to create any file 'foo.cc' from thin air is dangerous,
+# because it would do so whenever it needs a file 'foo'. So we allow it to
+# create only files that are explicitly mentioned on the command line, and
+# then only if they don't exist yet.
 NONEXISTENT_GOALS = $(filter-out $(ALL_FILES),$(MAKECMDGOALS))
 TEMPLATES = $(filter %_TEMPLATE,$(.VARIABLES))
 TEMPLATE_TYPES = $(patsubst %_TEMPLATE,%,$(TEMPLATES))
 TEMPLATABLE_EXTENSIONS = $(foreach TTYPE,$(TEMPLATE_TYPES),$($(TTYPE)_EXTENSION))
 TEMPLATABLE_GOALS = $(foreach EXTENSION,$(TEMPLATABLE_EXTENSIONS),$(filter %.$(EXTENSION),$(MAKECMDGOALS)))
-
-#$(info nonexistent goals: $(NONEXISTENT_GOALS))
-#$(info templates: $(TEMPLATES))
-#$(info template types: $(TEMPLATE_TYPES))
-#$(info templatable extensions: $(TEMPLATABLE_EXTENSIONS))
-#$(info templatable goals: $(TEMPLATABLE_GOALS))
 
 # Templatable goals can be made from a template, and are by definition nonexistent.
 ifneq (,$(TEMPLATABLE_GOALS))
