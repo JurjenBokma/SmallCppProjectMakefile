@@ -75,6 +75,10 @@ define HELP_TEXT :=
 
 endef
 
+# The file hooks.mk will be included if it exists.
+# You could put project-specific settings there.
+-include hooks.mk
+
 # We recognize files by their extensions, because file magic doesn't always
 # work to distinguish C++ from C.
 
@@ -87,6 +91,9 @@ CXX_INTERNAL_HEADER_EXTENSION ?= ih
 CXX_PCH_EXTENSION ?= $(CXX_INTERNAL_HEADER_EXTENSION).gch
 CXX_OBJECT_EXTENSION ?= $(CXX_SOURCE_EXTENSION).o
 DEP_EXTENSION ?= dep
+
+FLEXCXX_SCANNERSPEC_EXTENSION ?= fc++
+BISONCXX_PARSERSPEC_EXTENSION ?= bc++
 
 # By default, this Makefile does not echo recipe commands. But it can.
 # Try: 'make VERBOSE=1'
@@ -106,6 +113,9 @@ CONVLIB_FILE = lib$(CONVLIB).a
 
 # Directory where dependencies are stored.
 DEPDIR ?= generated_deps
+
+FLEXCXX ?= flexc++
+BISONCXX ?= bisonc++
 
 ## No editing below this line unless you know what you're doing. ##
 
@@ -175,6 +185,12 @@ CXX_INTERNAL_HEADERS := $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$(ALL_FILES)
 
 CXX_PRECOMPILED_HEADERS := $(CXX_INTERNAL_HEADERS:%=%.gch)
 CXX_PCH_DEPS := $(call deps_of,$(CXX_INTERNAL_HEADERS))
+
+FLEXCXX_SCANNERSPECS := $(filter %.$(FLEXCXX_SCANNERSPEC_EXTENSION),$(ALL_FILES))
+FLEXCXX_DEPS := $(call deps_of,$(FLEXCXX_SCANNERSPECS))
+
+BISONCXX_PARSERSPECS := $(filter %.$(BISONCXX_PARSERSPEC_EXTENSION),$(ALL_FILES))
+BISONCXX_DEPS := $(call deps_of,$(BISONCXX_PARSERSPECS))
 
 ###
 
@@ -251,24 +267,20 @@ clean: mostlyclean
 .INTERMEDIATE: $(CXX_OBJECTS) $(CXX_PRECOMPILED_HEADERS)
 
 # Once created, don't delete unless by make clean.
-.SECONDARY: $(CXX_PRECOMPILED_HEADERS)
-#$(CXX_OBJECTS)
+.SECONDARY: $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS)
 
 help:
 	@printf '$(subst $(NEWLINE),\n,$(HELP_TEXT))'
 
-#%:cxx_class: %:cxx_header %:cxx_internal_header
+# Give Make no way to make hooks.mk. User has to create it.
+hooks.mk:
 
-#%:cxx_header:
-
-#%:cxx_internal_header:
 
 # Making files from template is nice, but we can't safely tell Make to just
 # create any source file from scratch. There are too many cases where it may
 # need a file foo.bar, and decide that it can make one if it has foo.bar.cc,
 # so create that first.
 # So we only enable templates for files that don't exist yet.
-
 
 # The program source template shares its suffix with other sources.
 # So we use this trick: make foo.cc:program will create a program.
@@ -326,6 +338,9 @@ catch (...)
 }
 endef
 
+define FLEXCXX_SCANNERSPEC_TEMPLATE
+
+endef
 
 # Giving Make a recipe to create any file 'foo.cc' from thin air is dangerous,
 # because it would do so whenever it needs a file 'foo'. So we allow it to
@@ -368,7 +383,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # When only cleaning, we don't need dependencies.
     ifneq (,$(NEED_DEP_INCLUDES))
-        include $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS)
+        include $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
     endif
 
     undefine TARGETS_THAT_DONT_NEED_DEPS
@@ -393,6 +408,27 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) $<
     # If dependency generation should not be silent, add this command to the recipe:
     #	@echo "    [ $(ACTION) $@ <- $< ]"
+
+    # Figuring out flexc++' output from a given scannerspec is hard. So we simply
+    # keep a touchfile and rerun flexc++ whenever the spec is newer.
+    # We use --target-directory to put generated files in the same dir as the spec
+    # they were generated from. That won't work on specs that have internal
+    # %target-directory directives. FixMe?
+    $(FLEXCXX_DEPS): ACTION = Running $(FLEXCXX) merely to update empty timestamp:
+    $(FLEXCXX_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
+	$(ECHO_ACTION)
+	$(QUIET) $(FLEXCXX) $(FLEXCXXFLAGS) $(if $(*D),--target-directory='$(*D)') $< 
+	$(QUIET) mkdir -p $(dir $@)
+	$(QUIET) touch $@
+
+    # In contrast to flexc++, bisonc++ puts the generated files in the
+    # directory of the parser specification by default. No options needed.
+    $(BISONCXX_DEPS): ACTION = Running $(BISONCXX) merely to update empty timestamp:
+    $(BISONCXX_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
+	$(ECHO_ACTION)
+	$(QUIET) $(BISONCXX) $(BISONCXXFLAGS) $< 
+	$(QUIET) mkdir -p $(dir $@)
+	$(QUIET) touch $@
 
     # Keep deps once we have them.
     .SECONDARY: $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS)
