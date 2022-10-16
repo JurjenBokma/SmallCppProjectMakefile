@@ -1,8 +1,14 @@
+// Internal headers need no include guards.
+// Multi-program projects benefit from an internal header of their own.
+
 #include "cw/cw.hh"
 
 #include <iostream>
 #include <limits>
 #include <sstream>
+
+// No need to include these headers in every program.
+// Just include the internal header.
 
 using namespace std;
 

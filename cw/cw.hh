@@ -1,11 +1,13 @@
 #ifndef def_33b1ce7c_3466_11ed_8f4d_dfa221b644d4_ddetect_utils_hh
 #define def_33b1ce7c_3466_11ed_8f4d_dfa221b644d4_ddetect_utils_hh
+// Include guards prevent ODR violation my multiple inclusions.
 
 /// Functions that count wanted chars in streams or files.
 
-#include <istream>
+#include <iosfwd>
 #include <limits>
-#include <string>
+// The user includes this public header. Don't weigh their compiler down.
+// Only include the necessities for this header to be compiled.
 
 enum {
     ERR_SUCCESS = 0,

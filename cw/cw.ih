@@ -1,8 +1,10 @@
-#include "cw.hh"
+#include "cw.hh" // First! So the compiler will detect inclusion omissions.
 
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
+// In this internal header include all the combines sources in this dir need.
+// It gets precompiled, so the compiler sees it only once anyway.
 
-using namespace std;
+using namespace std;  // Ok here. Doesn't bother the user.
