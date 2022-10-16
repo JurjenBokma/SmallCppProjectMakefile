@@ -19,7 +19,7 @@ define HELP_TEXT =
 
     # Default behavior:
 
-    This Makefile causes 'make' to want to build programs, or if there
+    This Makefile causes `make` to want to build programs, or if there
     are no program sources, to build a convenience library. To do so, the
     following steps are taken.
 
@@ -41,7 +41,7 @@ define HELP_TEXT =
     LDFLAGS etc.) These can be set in the usual ways:
     https://www.gnu.org/software/make/manual/html_node/Values.html#Values
 
-    If a file 'hooks.mk' exists, it will be included. This can be used for
+    If a file `hooks.mk` exists, it will be included. This can be used for
     more permanent settings. For flexibility, the Makefile itself defines
     some additional variables that could be set there:
 
@@ -90,6 +90,7 @@ define HELP_TEXT =
 
     The command for creating a program source differs because it shares its
     file extension with non-program sources.
+    To make header files, the `uuid` utility is required.
     It is convenient to create the header first, because the template for the
     internal header will subsequently find and include it. The template for
     source files will find the internal header in turn.
