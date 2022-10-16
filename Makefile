@@ -1,45 +1,49 @@
 #!/usr/bin/make
 
+# So one can say: make help
 define HELP_TEXT =
 
     This Makefile is suitable for small C++ projects.
-    It assumes a GNU C++ compiler, and GNU Make.
+    It assumes a GNU C++ compiler, and GNU Make:
+    https://www.gnu.org/software/make/manual/
 
     # Most basic use:
 
+    Put Makefile and sources in one directory and there issue the command:
+
         make
+
+    To remove all the generated files:
+
         make clean
 
     # Default behavior:
 
-    This Makefile tells 'make' to wants to build programs, or if there
-    are no programs, the convenience library.
+    This Makefile causes 'make' to want to build programs, or if there
+    are no program sources, to build a convenience library. To do so, the
+    following steps are taken.
 
     Flexc++ will be called on any scanner specification files.
     Bisonc++ will be called on any parser specification files (grammars).
+    C++ source files and internal headers will be preprocessed in order to
+    determine their include dependencies.
+      (https://stackoverflow.com/questions/11063355/is-anyone-familiar-with-the-implementation-internal-header-ih)
     C++ internal header files will be precompiled.
     C++ source files will be compiled into object files.
-    Program objects (detected by grepping the source for a 'main' function)
-    will be linked against the convenience library, which will be composed of
-    all other object files.
+    A convenience will be composed of all non-program object files.
+    Program object files (detected by grepping the source for a 'main'
+    function) will be linked against the convenience library to become
+    executable programs.
 
-    # Influencing the working of the Makefile:
+    # Influencing the Makefile:
 
     The Makefile accepts the usual variables (CXX, CXXFLAGS, CPPFLAGS,
-    LDFLAGS etc.)
+    LDFLAGS etc.) These can be set in the usual ways:
+    https://www.gnu.org/software/make/manual/html_node/Values.html#Values
 
-    These can be set in the usual ways: as exported environment variables,
-    set on the command line as shell variables (before the command) or as
-    overriding parameters to Make (after the command):
-
-              export CXX=g++-12
-              CXX=g++-12 make
-              make CXX=g++-12
-
-    This is suitable for ad-hoc settings.
-    Permanent settings for a project can be put in a file hooks.mk, which if
-    present will be included in the Makefile. That is a suitable place to
-    specify e.g.
+    If a file 'hooks.mk' exists, it will be included. This can be used for
+    more permanent settings. For flexibility, the Makefile itself defines
+    some additional variables that could be set there:
 
     CXX_SOURCE_EXTENSION (defaults to: $(CXX_SOURCE_EXTENSION))
     CXX_HEADER_EXTENSION (defaults to: $(CXX_HEADER_EXTENSION))
@@ -53,40 +57,42 @@ define HELP_TEXT =
     FLEXCXX (defaults to: $(FLEXCXX))
     BISONCXX (defaults to: $(BISONCXX))
 
-    When setting these, do NOT include the dot in the extension!
+    When setting extensions, do NOT include the dot in the extension!
     Read the actual Makefile to find out what else to set.
 
     Some variables change the behaviour more extensively:
 
-        VERBOSE=yes causes some commands from recipes to be echoed.
+        VERBOSE=yes causes commands in recipes to be echoed.
         DEP=no      causes dependency analysis to be skipped.
-        PCH=no      prevents precompiled headers from being built.
-
-    Already-existing dependency files or precompiled headers may still get
-    used. So before disabling dependency analysis or precompiled headers, a
-    make clean is warranted.
+        PCH=no      prevents precompiled headers from being built,
+                    but not necessarily from being used if they exist.
 
     Also note that without analyzing dependencies, Make will not know which
     source file includes which internal header, so it will not create or
     update precompiled headers.
 
-    This Makefile works with Parallel Make (e.g. make -j4), but the feature is
-    not well-tested.
+    This Makefile works with Parallel Make (e.g. make -j4), but the feature has
+    not been extensively tested.
 
-    It can also create header, internal header and source files, preferably in
-    that order, from templates. E.g.:
+    # Creating files from templates:
+
+    Some files can be created from templates integrated in this Makefile.
+    E.g.:
 
         mkdir mc
-        make mc/mc.hh
-        make mc/mc.ih
+        make mc/myclass.hh
+        make mc/myclass.ih
         make mc/ctor1.cc
-
-    Flexc++ scanner specifications and bisonc++ parser specifications can also
-    be generated from templates.
-    For making programs from template, the syntax is a bit different, as they
-    share their extension with ordinary source files. To make myprog.cc, say:
-
+        mkdir parser
+        make parser/grammar.bc++
+        make parser/tokenizer.fc++
         make myprog.cc:program
+
+    The command for creating a program source differs because it shares its
+    file extension with non-program sources.
+    It is convenient to create the header first, because the template for the
+    internal header will subsequently find and include it. The template for
+    source files will find the internal header in turn.
 
 
 endef
@@ -101,7 +107,7 @@ endef
 # Extensions can be set here, or in the environment:
 # https://www.gnu.org/software/make/manual/html_node/Environment.html#Environment
 CXX_SOURCE_EXTENSION ?= cc
-# Some use .h
+# Some use h
 CXX_HEADER_EXTENSION ?= hh
 CXX_INTERNAL_HEADER_EXTENSION ?= ih
 CXX_PCH_EXTENSION ?= $(CXX_INTERNAL_HEADER_EXTENSION).gch
@@ -150,8 +156,7 @@ boolalpha = $(or \
    $(error cannot interpret $(1) as boolean)\
 )
 
-# We don't write escaped newlines.
-# Write normal recipes and escape newlines later.
+# NEWLINE is for use with printf, which is more reliable than echo.
 define NEWLINE
 
 
@@ -163,6 +168,7 @@ undefine PCH
 USE_GENERATED_DEPENDENCIES := $(call boolalpha,$(DEP))
 undefine DEP
 
+# QUIET is a '@', unless VERBOSE is true.
 QUIET := $(if $(filter true,$(call boolalpha,$(VERBOSE))),,@)
 undefine VERBOSE
 
@@ -196,9 +202,9 @@ CXX_TESTPROGS := $(filter tests/%,$(CXX_PROGS))
 CXX_NONPROG_SOURCES := $(filter-out $(CXX_PROG_SOURCES),$(CXX_SOURCES))
 CXX_NONPROG_OBJECTS := $(CXX_NONPROG_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%.$(CXX_OBJECT_EXTENSION))
 
-# From every internal header we can build a precompiled (internal) header.
 CXX_INTERNAL_HEADERS := $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$(ALL_FILES))
 
+# From every internal header we can build a precompiled (internal) header.
 CXX_PRECOMPILED_HEADERS := $(CXX_INTERNAL_HEADERS:%=%.gch)
 CXX_PCH_DEPS := $(call deps_of,$(CXX_INTERNAL_HEADERS))
 
@@ -240,6 +246,7 @@ $(CXX_PRECOMPILED_HEADERS): INPUTS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION)
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
+# This output usually shows instead of the actual command.
 ECHO_ACTION = @echo "    [ $(ACTION) $(or $(TARGET),$@) <- $(or $(INPUTS),$^) ]"
 
 # A rule says two things:
@@ -256,8 +263,9 @@ $(CONVLIB_FILE): $(CXX_NONPROG_OBJECTS)
 
 # We don't archive object files member my member, because
 # 1. the member is a transient prerequisite that causes remakes,
-# 2. allegedly it's slower on large projects,
-# 3. the individual archiving actions clutter our output.
+# 2. allegedly it's slow on large projects,
+# 3. the individual archiving actions clutter our output,
+# 4. it won't work with parallel Make.
 
 # If any program object file is newer than the program itself,
 # we rebuild the program, by linking the object file against the convenience library.
@@ -293,15 +301,12 @@ help:
 # Give Make no way to make hooks.mk. User has to create it.
 hooks.mk:
 
-
-# Making files from template is nice, but we can't safely tell Make to just
-# create any source file from scratch. There are too many cases where it may
-# need a file foo.bar, and decide that it can make one if it has foo.bar.cc,
-# so create that first.
-# So we only enable templates for files that don't exist yet.
+###  Below follow some templates that will create source and header files. ###
 
 # The program source template shares its suffix with other sources.
-# So we use this trick: make foo.cc:program will create a program.
+# So we use this trick: 'make foo.cc:program' will create a program 'foo.cc'.
+
+# Add proper extension if there was none, and remove e.g. ':program'.
 ACTUAL_FILE = $(addsuffix .$(EXTENSION),$(patsubst %.$(EXTENSION),%,$*))
 
 %\:program: TEMPLATE = $(CXX_PROGRAM_TEMPLATE)
@@ -311,13 +316,11 @@ ACTUAL_FILE = $(addsuffix .$(EXTENSION),$(patsubst %.$(EXTENSION),%,$*))
 	$(QUIET) if test -e "$(ACTUAL_FILE)" ; then echo "$(ACTUAL_FILE) already exists." ; false ; fi
 	$(QUIET) printf '$(subst $(NEWLINE),\n,$(TEMPLATE))' >> "$(ACTUAL_FILE)" && echo "$(ACTUAL_FILE) made from template"
 
-%\:cxx_class: %\:cxx_header %\:cxx_internal_header
-
-###  Below follow some templates that will create source and header files. ###
+# Not used. Using just extensions is shorter.
+#%\:cxx_class: %\:cxx_header %\:cxx_internal_header
 
 # Only files that are explictly mentioned on the command line and that don't
 #exist yet, can be created. Use like: make bar.hh
-
 
 # Header template. We use a UUID to keep the header guard unique.
 define CXX_HEADER_TEMPLATE
@@ -331,20 +334,21 @@ endef
 include-headers-in-same-dir = $(foreach HEADER,$(wildcard $(@D)/*.$(CXX_HEADER_EXTENSION)),#include "$(notdir $(HEADER))"\n)
 include-internal-headers-in-same-dir = $(foreach IHEADER,$(wildcard $(@D)/*.$(CXX_INTERNAL_HEADER_EXTENSION)),#include "$(notdir $(IHEADER))"\n)
 
-
+# INternal header template.
 define CXX_INTERNAL_HEADER_TEMPLATE
 $(include-headers-in-same-dir)
 
 using namespace std;\n
 endef
 
-
+# Ordinary source template
 define CXX_SOURCE_TEMPLATE
 $(include-internal-headers-in-same-dir)
 
 
 endef
 
+# Program template
 define CXX_PROGRAM_TEMPLATE
 int main(int argc, char **argv)
 try
@@ -356,6 +360,7 @@ catch (...)
 }
 endef
 
+# Scanner (tokenizer) specification template.
 define FLEXCXX_SCANNERSPEC_TEMPLATE
 
 //%%baseclass-header = "filename"
@@ -385,6 +390,7 @@ define FLEXCXX_SCANNERSPEC_TEMPLATE
 
 endef
 
+# Parser specification (grammar) template:
 define BISONCXX_PARSERSPEC_TEMPLATE
 //  With multiple parsers in one project, give each one its own namespace.
 // %%namespace pns
@@ -458,7 +464,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
     GOALS_THAT_NEED_DEPS := $(strip $(filter-out $(TARGETS_THAT_DONT_NEED_DEPS),$(MAKECMDGOALS)))
     NEED_DEP_INCLUDES := $(or $(MAKECMDGOALS_IS_EMPTY),$(GOALS_THAT_NEED_DEPS))
 
-    # When only cleaning, we don't need dependencies.
+    # When only e.g. cleaning, we don't need dependencies.
     ifneq (,$(NEED_DEP_INCLUDES))
         include $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
     endif
@@ -480,36 +486,41 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
     #-MF Specify file to write dependencies to.
 
     # To create a .dep file from a source or internal header file.
-    $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
+    $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS): $(call deps_of,%): %
 	$(QUIET) mkdir -p $(dir $@)
 	$(ECHO_ACTION)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) $<
-    # If dependency generation should not be silent, add this command to the recipe:
-    #@echo "    [ $(ACTION) $@ <- $< ]"
 
-    # Figuring out flexc++' output from a given scannerspec is hard. So we simply
-    # keep a touchfile and rerun flexc++ whenever the spec is newer.
-    # We use --target-directory to put generated files in the same dir as the spec
-    # they were generated from. That won't work on specs that have internal
-    # %target-directory directives. FixMe?
+    # Predicting which files flexc++ will generate from a given scanner
+    # specification file is hard. So we simply keep a touchfile and rerun
+    # flexc++ whenever the spec is newer.
+    # We use --target-directory to put generated files in the same directory
+    # as the specification file they were generated from.
+    # This overrides any internal %target-directory directives.
     $(FLEXCXX_DEPS): ACTION = Running $(FLEXCXX) merely to update empty timestamp:
-    $(FLEXCXX_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
+    $(FLEXCXX_DEPS): $(call deps_of,%): %
 	$(ECHO_ACTION)
-	$(QUIET) $(FLEXCXX) $(FLEXCXXFLAGS) $(if $(*D),--target-directory='$(*D)') $< 
+	$(QUIET) $(FLEXCXX) $(FLEXCXXFLAGS) --target-directory=$(or $(*D),.) $< 
 	$(QUIET) mkdir -p $(dir $@)
 	$(QUIET) touch $@
 
     # In contrast to flexc++, bisonc++ puts the generated files in the
     # directory of the parser specification by default. No options needed.
     $(BISONCXX_DEPS): ACTION = Running $(BISONCXX) merely to update empty timestamp:
-    $(BISONCXX_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
+    $(BISONCXX_DEPS): $(call deps_of,%): %
 	$(ECHO_ACTION)
 	$(QUIET) $(BISONCXX) $(BISONCXXFLAGS) $< 
 	$(QUIET) mkdir -p $(dir $@)
 	$(QUIET) touch $@
+    # Note that both bisonc++ and flexc++ are run merely to update the empty
+    # .dep file for inclusion. The files they generate are side effects. The
+    # reason this works is because Make will update includes before handling
+    # any other recipes.
+    # FixMe: why does Make consistently update bisonc++ and flexc++ deps
+    # before source deps?
 
     # Keep deps once we have them.
-    .SECONDARY: $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS)
+    .SECONDARY: $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
 
     # When cleaning, we should get rid of the deps again.
     clean: depclean
@@ -525,7 +536,7 @@ endif
 # Make does not canonicalize relative paths in generated dependencies. As a
 # result it may want to make foo/../bar.ih.gch,
 # which when simplified reads:      bar.ih.gch.
-# With Parallel Make this more often turns out to be a problem.
+# With Parallel Make this more often turns out to be a problem. FixMe: why?
 # To mitigate, we tell Make how to remove the /../ from paths:
 define PATH_STRAIGHTENING_RECIPE
 $(DIR)../%: $(patsubst ./%,%,$(dir $(DIR:%/=%))%)
@@ -536,19 +547,6 @@ endef
 DIRECTORIES_FOUND = $(sort $(filter-out ./,$(dir $(ALL_FILES:./%=%))))
 $(foreach DIR,$(DIRECTORIES_FOUND), $(eval $(PATH_STRAIGHTENING_RECIPE)))
 #$(foreach DIR,$(DIRECTORIES_FOUND), $(info $(PATH_STRAIGHTENING_RECIPE)))
-
-
-### Checking for include guards ###
-
-CXX_HEADERS := $(filter %.$(CXX_HEADER_EXTENSION),$(ALL_FILES))
-
-include-guard-checks: $(CXX_HEADERS)
-	~/dev/bash/double-include-check $^
-
-.PHONY: include-guard-checks
-
-### End of include guard check ###
-
 
 ### End of Parallel Make measures. ###
 
