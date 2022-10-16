@@ -41,7 +41,7 @@ define HELP_TEXT =
     present will be included in the Makefile. That is a suitable place to
     specify e.g.
 
-    CXX_SOURCE_EXTENSION (defaults to: $(CXX_SOURCE_EXTENSION)) (NB: NO DOT!)
+    CXX_SOURCE_EXTENSION (defaults to: $(CXX_SOURCE_EXTENSION))
     CXX_HEADER_EXTENSION (defaults to: $(CXX_HEADER_EXTENSION))
     CXX_INTERNAL_HEADER_EXTENSION (defaults to: $(CXX_INTERNAL_HEADER_EXTENSION))
     CXX_PCH_EXTENSION (defaults to: $(CXX_PCH_EXTENSION))
@@ -53,6 +53,7 @@ define HELP_TEXT =
     FLEXCXX (defaults to: $(FLEXCXX))
     BISONCXX (defaults to: $(BISONCXX))
 
+    When setting these, do NOT include the dot in the extension!
     Read the actual Makefile to find out what else to set.
 
     Some variables change the behaviour more extensively:
@@ -228,16 +229,18 @@ $(CXX_PROGS): ACTION = Linking
 $(CXX_PROGS): LDFLAGS += -L. -l$(CONVLIB)
 
 $(CXX_OBJECTS): ACTION = Compiling
+$(CXX_OBJECTS): INPUTS = $(filter %.$(CXX_SOURCE_EXTENSION),$^)
 $(CXX_OBJECTS): CXXFLAGS += -c
 
 $(CONVLIB_FILE): ACTION = Collecting
 
 $(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
+$(CXX_PRECOMPILED_HEADERS): INPUTS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$^)
 
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
-ECHO_ACTION = @echo "    [ $(ACTION) $@ <- $^ ]"
+ECHO_ACTION = @echo "    [ $(ACTION) $(or $(TARGET),$@) <- $(or $(INPUTS),$^) ]"
 
 # A rule says two things:
 # 1. To build any of the target, i.e. $(CONVLIB_FILE),
