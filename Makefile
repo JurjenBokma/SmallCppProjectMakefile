@@ -1,46 +1,59 @@
 #!/usr/bin/make
 
-define HELP_TEXT :=
+define HELP_TEXT =
 
     This Makefile is suitable for small C++ projects.
     It assumes a GNU C++ compiler, and GNU Make.
 
-    Its most basic uses are:
+    # Most basic use:
 
         make
         make clean
 
-    When this Makefile is used, 'make' wants to build programs, or if there
+    # Default behavior:
+
+    This Makefile tells 'make' to wants to build programs, or if there
     are no programs, the convenience library.
 
-    It detects program sources by grepping for a 'main' function, and it
-    compiles them into object files. The object files of all other (i.e.
-    non-program) sources go into the convenience library.
+    Flexc++ will be called on any scanner specification files.
+    Bisonc++ will be called on any parser specification files (grammars).
+    C++ internal header files will be precompiled.
+    C++ source files will be compiled into object files.
+    Program objects (detected by grepping the source for a 'main' function)
+    will be linked against the convenience library, which will be composed of
+    all other object files.
 
-    The Makefile detects includes, so if a source file includes an internal
-    header, the internal header is compiled into a precompiled header before
-    the source file is compiled into an object file.
+    # Influencing the working of the Makefile:
 
-    To finally produce the program, the program object is linked against the
-    convenience library.
+    The Makefile accepts the usual variables (CXX, CXXFLAGS, CPPFLAGS,
+    LDFLAGS etc.)
 
-    The Makefile accepts the usual environment variables, like CXX, CXXFLAGS,
-    CPPFLAGS, in the usual ways:
-        - exported:
+    These can be set in the usual ways: as exported environment variables,
+    set on the command line as shell variables (before the command) or as
+    overriding parameters to Make (after the command):
 
               export CXX=g++-12
-              make
+              CXX=g++-12 make
+              make CXX=g++-12
 
-        - set on the command line:
+    This is suitable for ad-hoc settings.
+    Permanent settings for a project can be put in a file hooks.mk, which if
+    present will be included in the Makefile. That is a suitable place to
+    specify e.g.
 
-              CXXFLAGS=-Wall make
+    CXX_SOURCE_EXTENSION (defaults to: $(CXX_SOURCE_EXTENSION)) (NB: NO DOT!)
+    CXX_HEADER_EXTENSION (defaults to: $(CXX_HEADER_EXTENSION))
+    CXX_INTERNAL_HEADER_EXTENSION (defaults to: $(CXX_INTERNAL_HEADER_EXTENSION))
+    CXX_PCH_EXTENSION (defaults to: $(CXX_PCH_EXTENSION))
+    CXX_OBJECT_EXTENSION (defaults to: $(CXX_OBJECT_EXTENSION))
+    DEP_EXTENSION (defaults to: $(DEP_EXTENSION))
+    FLEXCXX_SCANNERSPEC_EXTENSION (defaults to: $(FLEXCXX_SCANNERSPEC_EXTENSION))
+    BISONCXX_PARSERSPEC_EXTENSION (defaults to: $(BISONCXX_PARSERSPEC_EXTENSION))
+    DEPDIR (defaults to: $(DEPDIR))
+    FLEXCXX (defaults to: $(FLEXCXX))
+    BISONCXX (defaults to: $(BISONCXX))
 
-        - or overridden in a command line argument to 'make':
-
-             make CXXFLAGS=-O2
-
-    Additional variables, like CXX_SOURCE_EXTENSION, CXX_HEADER_EXTENSION etc.
-    are also used, and can be changed in the same ways.
+    Read the actual Makefile to find out what else to set.
 
     Some variables change the behaviour more extensively:
 
@@ -48,9 +61,9 @@ define HELP_TEXT :=
         DEP=no      causes dependency analysis to be skipped.
         PCH=no      prevents precompiled headers from being built.
 
-    Note that already-existing dependency files or precompiled headers may
-    still get used. So before disabling dependency analysis or precompiled
-    headers, a make clean is warranted.
+    Already-existing dependency files or precompiled headers may still get
+    used. So before disabling dependency analysis or precompiled headers, a
+    make clean is warranted.
 
     Also note that without analyzing dependencies, Make will not know which
     source file includes which internal header, so it will not create or
@@ -59,7 +72,7 @@ define HELP_TEXT :=
     This Makefile works with Parallel Make (e.g. make -j4), but the feature is
     not well-tested.
 
-    It can also make header, internal header and source files, preferably in
+    It can also create header, internal header and source files, preferably in
     that order, from templates. E.g.:
 
         mkdir mc
@@ -67,7 +80,9 @@ define HELP_TEXT :=
         make mc/mc.ih
         make mc/ctor1.cc
 
-    For making programs from template, the syntax is a bit diferent, as they
+    Flexc++ scanner specifications and bisonc++ parser specifications can also
+    be generated from templates.
+    For making programs from template, the syntax is a bit different, as they
     share their extension with ordinary source files. To make myprog.cc, say:
 
         make myprog.cc:program
@@ -340,6 +355,63 @@ endef
 
 define FLEXCXX_SCANNERSPEC_TEMPLATE
 
+//%%baseclass-header = "filename"
+//%%case-insensitive
+//%%class-header = "filename"
+//%%class-name = "className"
+//%%debug
+//%%filenames = "basename"
+//%%implementation-header = "filename"
+//%%input-implementation = "sourcefile"
+//%%input-interface = "interface"
+//%%interactive
+//%%lex-function-name = "funname"
+//%%lex-source = "filename"
+//%%no-lines
+//%%namespace = "identifer"
+//%%print-tokens
+//%%s start-conditions
+//%%skeleton-directory = "pathname"
+//%%startcondition-name = "startconditionName"
+//%%target-directory = "pathname"
+//%%x miniscanners
+
+%%%%
+
+.|\\n   return 0x100;
+
+endef
+
+define BISONCXX_PARSERSPEC_TEMPLATE
+//  With multiple parsers in one project, give each one its own namespace.
+// %%namespace pns
+
+// %%baseclass-preinclude: specifying a header included by the baseclass
+// %%class-name: defining the name of the parser class
+// %%debug: adding debugging code to the parse() member
+
+//  Flexc++-generated default. Adjust to needs.
+%%scanner Scanner.h
+
+// %%baseclass-header: defining the parser base class header
+// %%class-header: defining the parser class header
+// %%filenames: specifying a generic filename
+// %%implementation-header: defining the implementation header
+// %%parsefun-source: defining the parse() function sourcefile
+// %%target-directory: defining the directory where files must be written
+// %%token-path: defining the path of the file containing the Tokens_ enumeration
+
+// %%polymorphic INT: int; STRING: std::string; 
+//               VECT: std::vector<double>
+
+%%token TERMINAL
+
+%%%%
+
+nonterminal:
+TERMINAL
+;
+
 endef
 
 # Giving Make a recipe to create any file 'foo.cc' from thin air is dangerous,
@@ -355,11 +427,13 @@ TEMPLATABLE_GOALS = $(foreach EXTENSION,$(TEMPLATABLE_EXTENSIONS),$(filter %.$(E
 # Templatable goals can be made from a template, and are by definition nonexistent.
 ifneq (,$(TEMPLATABLE_GOALS))
 
-    %.cc: TEMPLATE = $(CXX_SOURCE_TEMPLATE)
-    %.ih: TEMPLATE = $(CXX_INTERNAL_HEADER_TEMPLATE)
-    %.hh: TEMPLATE = $(CXX_HEADER_TEMPLATE)
-    %.hh: UUID := $(subst -,_,$(shell uuid))
-    %.hh: HID = $(basename $(notdir $@))
+    %.$(CXX_SOURCE_EXTENSION): TEMPLATE = $(CXX_SOURCE_TEMPLATE)
+    %.$(CXX_INTERNAL_HEADER_EXTENSION): TEMPLATE = $(CXX_INTERNAL_HEADER_TEMPLATE)
+    %.$(CXX_HEADER_EXTENSION): TEMPLATE = $(CXX_HEADER_TEMPLATE)
+    %.$(CXX_HEADER_EXTENSION): UUID := $(subst -,_,$(shell uuid))
+    %.$(CXX_HEADER_EXTENSION): HID = $(basename $(notdir $@))
+    %.$(FLEXCXX_SCANNERSPEC_EXTENSION): TEMPLATE = $(FLEXCXX_SCANNERSPEC_TEMPLATE)
+    %.$(BISONCXX_PARSERSPEC_EXTENSION): TEMPLATE = $(BISONCXX_PARSERSPEC_TEMPLATE)
 
     $(TEMPLATABLE_GOALS):
 	printf '$(subst $(NEWLINE),\n,$(TEMPLATE))' >> $@
@@ -376,7 +450,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # Prevent dependency generation if MAKECMDGOALS is non-empty and consists
     # only of targets that don't need dependencies.
-    TARGETS_THAT_DONT_NEED_DEPS := clean mostlyclean depclean help
+    TARGETS_THAT_DONT_NEED_DEPS := clean mostlyclean depclean help $(TEMPLATABLE_GOALS)
     MAKECMDGOALS_IS_EMPTY := $(if $(MAKECMDGOALS),,yes)
     GOALS_THAT_NEED_DEPS := $(strip $(filter-out $(TARGETS_THAT_DONT_NEED_DEPS),$(MAKECMDGOALS)))
     NEED_DEP_INCLUDES := $(or $(MAKECMDGOALS_IS_EMPTY),$(GOALS_THAT_NEED_DEPS))
@@ -404,10 +478,11 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # To create a .dep file from a source or internal header file.
     $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS): $(DEPDIR)/%.$(DEP_EXTENSION): %
-	@mkdir -p $(dir $@)
+	$(QUIET) mkdir -p $(dir $@)
+	$(ECHO_ACTION)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) $<
     # If dependency generation should not be silent, add this command to the recipe:
-    #	@echo "    [ $(ACTION) $@ <- $< ]"
+    #@echo "    [ $(ACTION) $@ <- $< ]"
 
     # Figuring out flexc++' output from a given scannerspec is hard. So we simply
     # keep a touchfile and rerun flexc++ whenever the spec is newer.
@@ -483,7 +558,7 @@ ifeq ($(USE_PRECOMPILED_HEADERS),true)
 
     # Each internal header shall become a precompiled header.
     $(CXX_PRECOMPILED_HEADERS): %.$(CXX_PCH_EXTENSION): %.$(CXX_INTERNAL_HEADER_EXTENSION)
-	@echo "    [ $(ACTION) $@ <- $< ]"
+	$(ECHO_ACTION)
 	$(QUIET) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 
     # For each internal header in the prerequisites, add a precompiled header.
