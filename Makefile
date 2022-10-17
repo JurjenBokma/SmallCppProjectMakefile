@@ -58,6 +58,7 @@ define HELP_TEXT =
     BISONCXX (defaults to: $(BISONCXX))
 
     When setting extensions, do NOT include the dot in the extension!
+    Setting DEPDIR to . or to the empty string will cause errors.
     Read the actual Makefile to find out what else to set.
 
     Some variables change the behaviour more extensively:
@@ -162,6 +163,7 @@ define NEWLINE
 
 
 endef
+#SP is for alignments
 
 USE_PRECOMPILED_HEADERS := $(call boolalpha,$(PCH))
 undefine PCH
@@ -176,6 +178,19 @@ undefine VERBOSE
 # Recursive wildcard to find all files in the current directory and subdirs.
 # Using a $(shell find...) would also work, but depend on the find utility.
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+# Acts as 'dir', but may return the empty string instead of './'
+maybe_dir=$(filter-out ./,$(dir $1))
+
+# On e.g. foo/bar/baz returns foo/bar/ foo/
+rdir=$(foreach d,$(call maybe_dir,$1),$d $(call rdir,$(patsubst %/,%,$d)))
+
+# Reverses a word list, to list deepest directories first after sort.
+reverse=$(if $(wordlist 2,2,$(1)),$(call reverse,$(wordlist 2,$(words $(1)),$(1))) $(firstword $(1)),$(1))
+
+# Useful to remove a tree of empty dirs, recursively:
+# Lists dirs recursively, deepest first, with no duplicates.
+rdirs=$(call reverse,$(sort $(foreach dir,$1,$(call rdir,$(dir)))))
 
 # Simply list all files we can find.
 ALL_FILES := $(patsubst ./%,%,$(call rwildcard,.,*))
@@ -217,6 +232,8 @@ BISONCXX_DEPS := $(call deps_of,$(BISONCXX_PARSERSPECS))
 
 ###
 
+ALL_DEPS = $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
+
 # Could be used to suppress all built-in rules.
 .SUFFIXES:
 
@@ -232,23 +249,25 @@ all: $(CXX_PROGS) $(CONVLIB_FILE)
 $(CXX_PROGS): $(CONVLIB_FILE)
 
 # To create an executable program is called: 'Linking'.
-$(CXX_PROGS): ACTION = Linking
+$(CXX_PROGS): METHOD = Link       
 $(CXX_PROGS): LDFLAGS += -L. -l$(CONVLIB)
 
-$(CXX_OBJECTS): ACTION = Compiling
+$(CXX_OBJECTS): METHOD = Compile    
 $(CXX_OBJECTS): INPUTS = $(filter %.$(CXX_SOURCE_EXTENSION),$^)
 $(CXX_OBJECTS): CXXFLAGS += -c
 
-$(CONVLIB_FILE): ACTION = Collecting
+$(CONVLIB_FILE): METHOD = Collect    
 
-$(CXX_PRECOMPILED_HEADERS): ACTION = Pre-compiling
+$(CXX_PRECOMPILED_HEADERS): METHOD = Pre-compile
 $(CXX_PRECOMPILED_HEADERS): INPUTS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION),$^)
 
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
 
+# Action tells whether we're updating or creating.
+ACTION = $(if $(filter $@,$(ALL_FILES)),->,=>)
 # This output usually shows instead of the actual command.
-ECHO_ACTION = @echo "    [ $(ACTION) $(or $(TARGET),$@) <- $(or $(INPUTS),$^) ]"
+ECHO_ACTION = @echo "    [ $(METHOD)  $(or $(INPUTS),$^)\t$(ACTION)\t$(or $(TARGET),$@)\t]"
 
 # A rule says two things:
 # 1. To build any of the target, i.e. $(CONVLIB_FILE),
@@ -281,7 +300,7 @@ $(CXX_OBJECTS): %.$(CXX_OBJECT_EXTENSION): %.$(CXX_SOURCE_EXTENSION)
 
 # Clean everything except the programs.
 mostlyclean:
-	$(QUIET) rm -f $(DEP_FILES) $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB_FILE)
+	$(QUIET) rm -f $(CXX_PRECOMPILED_HEADERS) $(CXX_OBJECTS) $(CONVLIB_FILE)
 
 # Remove everything Make created.
 clean: mostlyclean
@@ -467,7 +486,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # When only e.g. cleaning, we don't need dependencies.
     ifneq (,$(NEED_DEP_INCLUDES))
-        include $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
+        include $(ALL_DEPS)
     endif
 
     undefine TARGETS_THAT_DONT_NEED_DEPS
@@ -475,7 +494,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
     undefine GOALS_THAT_NEED_DEPS
     undefine NEED_DEP_INCLUDES
 
-    $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS): ACTION = Analyzing dependencies
+    $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS): METHOD = Analyze    
     # These are flags for generating dependencies.
     $(CXX_SOURCE_DEPS): CPPFLAGS += -E -fdirectives-only -MQ $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENSION),$<) -MM -MF $@
     $(CXX_PCH_DEPS): CPPFLAGS += -E -fdirectives-only -MQ $(patsubst %.$(CXX_INTERNAL_HEADER_EXTENSION),%.$(CXX_PCH_EXTENSION),$<) -MM -MF $@
@@ -498,7 +517,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
     # We use --target-directory to put generated files in the same directory
     # as the specification file they were generated from.
     # This overrides any internal %target-directory directives.
-    $(FLEXCXX_DEPS): ACTION = Running $(FLEXCXX) merely to update empty timestamp:
+    $(FLEXCXX_DEPS): METHOD = $(FLEXCXX)    
     $(FLEXCXX_DEPS): $(call deps_of,%): %
 	$(ECHO_ACTION)
 	$(QUIET) $(FLEXCXX) $(FLEXCXXFLAGS) --target-directory=$(or $(*D),.) $< 
@@ -507,7 +526,7 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
 
     # In contrast to flexc++, bisonc++ puts the generated files in the
     # directory of the parser specification by default. No options needed.
-    $(BISONCXX_DEPS): ACTION = Running $(BISONCXX) merely to update empty timestamp:
+    $(BISONCXX_DEPS): METHOD = $(BISONCXX)   
     $(BISONCXX_DEPS): $(call deps_of,%): %
 	$(ECHO_ACTION)
 	$(QUIET) $(BISONCXX) $(BISONCXXFLAGS) $< 
@@ -521,12 +540,15 @@ ifeq ($(USE_GENERATED_DEPENDENCIES),true)
     # before source deps?
 
     # Keep deps once we have them.
-    .SECONDARY: $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
+    .SECONDARY: $(ALL_DEPS)
 
     # When cleaning, we should get rid of the deps again.
-    clean: depclean
+    mostlyclean: depclean
+    # An rm -rf is always dangerous.
+    # So we remove the files first, then remove empty dirs only.
     depclean:
-	$(QUIET) rm -rf $(DEPDIR)
+	$(QUIET) rm -f $(ALL_DEPS)
+	$(QUIET) rm -fd $(call rdirs,$(ALL_DEPS))
 
     .PHONY: depclean
 
