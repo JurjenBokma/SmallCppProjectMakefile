@@ -16,7 +16,7 @@ Put Makefile and sources in one directory and there issue the command:
 
     make
 
-To remove all the generated files:
+To remove all the generated files (which should seldom be necessary):
 
     make clean
 
@@ -37,6 +37,12 @@ following steps are taken.
 * Program object files (detected by grepping the source for a `main`
   function) will be linked against the convenience library to become
   executable programs.
+
+Because the Makefile detects which files include which others, updating a
+header file will cause all source files that (indirectly) include it to be
+remade. On one hand, this consumes time. On the other hand it saves time by
+keeping sources and headers in sync, so `make clean` should seldom have to be
+run.
 
 ## Influencing the Makefile:
 
@@ -137,7 +143,8 @@ DEP ?= true
 
 # The name of our convenience library.
 CONVLIB = $(notdir $(CURDIR))
-CONVLIB_FILE = lib$(CONVLIB).a
+CONVLIB_EXTENSION = a
+CONVLIB_FILE = lib$(CONVLIB).$(CONVLIB_EXTENSION)
 
 # Directory where dependencies are stored.
 DEPDIR ?= generated_deps
@@ -260,6 +267,19 @@ $(CXX_PRECOMPILED_HEADERS): INPUTS = $(filter %.$(CXX_INTERNAL_HEADER_EXTENSION)
 
 # When compiling a precompiled header, specify that it's a header.
 $(CXX_PRECOMPILED_HEADERS): CXXFLAGS += -x c++-header
+
+# When a source file is deleted, the object files may linger. Let Make warn then.
+GENERATED_EXTENSIONS = $(CXX_OBJECT_EXTENSION) $(CONVLIB_EXTENSION) $(CXX_PCH_EXTENSION) $(DEP_EXTENSION)
+#$(info generated extensions: $(GENERATED_EXTENSIONS))
+KNOWN_GENERATED_FILES = $(CONVLIB_FILE) $(CXX_OBJECTS) $(CXX_PRECOMPILED_HEADERS) $(ALL_DEPS)
+#$(info known generated: $(KNOWN_GENERATED_FILES))
+EVER_GENERATED_FILES = $(filter $(addprefix %.,$(GENERATED_EXTENSIONS)),$(ALL_FILES))
+#$(info ever generated: $(EVER_GENERATED_FILES))
+UNKNOWN_GENERATED_FILES = $(filter-out $(KNOWN_GENERATED_FILES),$(EVER_GENERATED_FILES))
+#$(info unknown generated: $(UNKNOWN_GENERATED_FILES))
+ifneq (,$(UNKNOWN_GENERATED_FILES))
+    $(warning $(NEWLINE)Warning: Make may once have generated, but cannot update any more the following files:$(NEWLINE)$(NEWLINE)  $(UNKNOWN_GENERATED_FILES)$(NEWLINE)$(NEWLINE)Perhaps their sources do not exist any more. Consider cleaning them up.)
+endif
 
 # Action tells whether we're updating or creating.
 ACTION = $(if $(filter $@,$(ALL_FILES)),->,=>)

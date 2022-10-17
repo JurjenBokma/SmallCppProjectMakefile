@@ -12,7 +12,7 @@ Put Makefile and sources in one directory and there issue the command:
 
     make
 
-To remove all the generated files:
+To remove all the generated files (which should seldom be necessary):
 
     make clean
 
@@ -33,6 +33,12 @@ following steps are taken.
 * Program object files (detected by grepping the source for a `main`
   function) will be linked against the convenience library to become
   executable programs.
+
+Because the Makefile detects which files include which others, updating a
+header file will cause all source files that (indirectly) include it to be
+remade. On one hand, this consumes time. On the other hand it saves time by
+keeping sources and headers in sync, so `make clean` should seldom have to be
+run.
 
 ## Influencing the Makefile:
 
