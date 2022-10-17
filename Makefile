@@ -3,121 +3,125 @@
 # So one can say: make help
 define HELP_TEXT =
 
-    This Makefile is suitable for small C++ projects.
-    It assumes a GNU C++ compiler, and GNU Make:
-    https://www.gnu.org/software/make/manual/
+This Makefile is suitable for building small C++ projects.
+It requires very little extra configuration.
+It assumes a GNU C++ compiler, and GNU Make:
+[Make manual](https://www.gnu.org/software/make/manual/)
+It was written for Linux, but has been reported to work on Macs and under
+MinGW64. It does not seem to break when make is told to run parallel jobs.
 
-    # Most basic use:
+## Most basic use:
 
-    Put Makefile and sources in one directory and there issue the command:
+Put Makefile and sources in one directory and there issue the command:
 
-        make
+    make
 
-    To remove all the generated files:
+To remove all the generated files:
 
-        make clean
+    make clean
 
-    # Default behavior:
+## Default behavior:
 
-    This Makefile causes `make` to want to build programs, or if there
-    are no program sources, to build a convenience library. To do so, the
-    following steps are taken.
+The Makefile causes `make` to want to build programs, or if there
+are no program sources, to build a convenience library. To do so, the
+following steps are taken.
 
-    Flexc++ will be called on any scanner specification files.
-    Bisonc++ will be called on any parser specification files (grammars).
-    C++ source files and internal headers will be preprocessed in order to
-    determine their include dependencies.
-      (https://stackoverflow.com/questions/11063355/is-anyone-familiar-with-the-implementation-internal-header-ih)
-    C++ internal header files will be precompiled.
-    C++ source files will be compiled into object files.
-    A convenience will be composed of all non-program object files.
-    Program object files (detected by grepping the source for a 'main'
-    function) will be linked against the convenience library to become
-    executable programs.
+* Flexc++ will be called on any scanner specification files.
+* Bisonc++ will be called on any parser specification files (grammars).
+* C++ source files and internal headers will be preprocessed in order to
+  determine their include dependencies.
+  [internal headers explained](https://stackoverflow.com/questions/11063355/is-anyone-familiar-with-the-implementation-internal-header-ih)
+* If included anywhere, C++ internal header files will be precompiled.
+* C++ source files will be compiled into object files.
+* A convenience library will be composed of all non-program object files.
+* Program object files (detected by grepping the source for a `main`
+  function) will be linked against the convenience library to become
+  executable programs.
 
-    # Influencing the Makefile:
+## Influencing the Makefile:
 
-    The Makefile accepts the usual variables (CXX, CXXFLAGS, CPPFLAGS,
-    LDFLAGS etc.) These can be set in the usual ways:
-    https://www.gnu.org/software/make/manual/html_node/Values.html#Values
+The Makefile accepts the usual variables (CXX, CXXFLAGS, CPPFLAGS,
+LDFLAGS etc.) as well as FLEXCXX (defaults to: $(FLEXCXX)) and BISONCXX
+(defaults to: $(BISONCXX)) These can be set in the usual ways:
+[How variables get their values](https://www.gnu.org/software/make/manual/html_node/Values.html#Values)
 
-    If a file `hooks.mk` exists, it will be included. This can be used for
-    more permanent settings. For flexibility, the Makefile itself defines
-    some additional variables that could be set there:
+They can also be set in a file `hooks.mk`, which if it exists, will be
+included. Extensions can be set there too, though it should seldom be
+necessary, as they auto-adapt to files found.
 
     CXX_SOURCE_EXTENSION (defaults to: $(CXX_SOURCE_EXTENSION))
     CXX_HEADER_EXTENSION (defaults to: $(CXX_HEADER_EXTENSION))
     CXX_INTERNAL_HEADER_EXTENSION (defaults to: $(CXX_INTERNAL_HEADER_EXTENSION))
-    CXX_PCH_EXTENSION (defaults to: $(CXX_PCH_EXTENSION))
-    CXX_OBJECT_EXTENSION (defaults to: $(CXX_OBJECT_EXTENSION))
-    DEP_EXTENSION (defaults to: $(DEP_EXTENSION))
     FLEXCXX_SCANNERSPEC_EXTENSION (defaults to: $(FLEXCXX_SCANNERSPEC_EXTENSION))
     BISONCXX_PARSERSPEC_EXTENSION (defaults to: $(BISONCXX_PARSERSPEC_EXTENSION))
-    DEPDIR (defaults to: $(DEPDIR))
-    FLEXCXX (defaults to: $(FLEXCXX))
-    BISONCXX (defaults to: $(BISONCXX))
 
-    When setting extensions, do NOT include the dot in the extension!
-    Setting DEPDIR to . or to the empty string will cause errors.
-    Read the actual Makefile to find out what else to set.
+When setting extensions, do NOT include the dot in the extension!
+DEPDIR (defaults to: $(DEPDIR)) can also be set but is best left alone.
 
-    Some variables change the behaviour more extensively:
+Some variables change the behaviour more extensively:
 
-        VERBOSE=yes causes commands in recipes to be echoed.
-        DEP=no      causes dependency analysis to be skipped.
-        PCH=no      prevents precompiled headers from being built,
-                    but not necessarily from being used if they exist.
+    VERBOSE=yes causes commands in recipes to be echoed.
+    DEP=no      causes dependency analysis to be skipped.
+    PCH=no      prevents precompiled headers from being built,
+                but not necessarily from being used if they exist.
 
-    Also note that without analyzing dependencies, Make will not know which
-    source file includes which internal header, so it will not create or
-    update precompiled headers.
+Note that without analyzing dependencies, Make will not know which
+source file includes which internal header, so it will not create or
+update precompiled headers.
 
-    This Makefile works with Parallel Make (e.g. make -j4), but the feature has
-    not been extensively tested.
+## Creating files from templates:
 
-    # Creating files from templates:
+Some files can be created from templates integrated in this Makefile.
+E.g.:
 
-    Some files can be created from templates integrated in this Makefile.
-    E.g.:
+    mkdir mc
+    make mc/myclass.hh
+    make mc/myclass.ih
+    make mc/ctor1.cc
+    mkdir parser
+    make parser/grammar.bc++
+    make parser/tokenizer.fc++
+    make myprog.cc:program
 
-        mkdir mc
-        make mc/myclass.hh
-        make mc/myclass.ih
-        make mc/ctor1.cc
-        mkdir parser
-        make parser/grammar.bc++
-        make parser/tokenizer.fc++
-        make myprog.cc:program
-
-    The command for creating a program source differs because it shares its
-    file extension with non-program sources.
-    To make header files, the `uuid` utility is required.
-    It is convenient to create the header first, because the template for the
-    internal header will subsequently find and include it. The template for
-    source files will find the internal header in turn.
+The command for creating a program source differs because it shares its
+file extension with non-program sources.
+To make header files, the `uuid` utility must be present.
+It is convenient to create the header first, because the template for the
+internal header will subsequently find and include it. The template for
+source files will find the internal header in turn.
 
 
 endef
+
+# Recursive wildcard to find all files in the current directory and subdirs.
+# Using a $(shell find...) would also work, but depend on the find utility.
+rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+# Simply list all files we can find.
+ALL_FILES := $(patsubst ./%,%,$(call rwildcard,.,*))
+
+# We recognize files by their extensions, because file magic doesn't always
+# work to distinguish C++ from C.
+
+# Autodetection of file extensions.
+first_extension_found = $(patsubst .%,%,$(or $(firstword $(foreach X,$1,$(filter %.$X,$(suffix $(ALL_FILES))))),$(firstword $1)))
 
 # The file hooks.mk will be included if it exists.
 # You could put project-specific settings there.
 -include hooks.mk
 
-# We recognize files by their extensions, because file magic doesn't always
-# work to distinguish C++ from C.
-
 # Extensions can be set here, or in the environment:
 # https://www.gnu.org/software/make/manual/html_node/Environment.html#Environment
-CXX_SOURCE_EXTENSION ?= cc
+CXX_SOURCE_EXTENSION ?= $(call first_extension_found, cc cpp cxx c++ C)
 # Some use h
-CXX_HEADER_EXTENSION ?= hh
-CXX_INTERNAL_HEADER_EXTENSION ?= ih
+CXX_HEADER_EXTENSION ?= $(call first_extension_found, hh hpp hxx h++ H h)
+CXX_INTERNAL_HEADER_EXTENSION ?= $(call first_extension_found, ihh ihpp ihxx ih++ IH ih)
 CXX_PCH_EXTENSION ?= $(CXX_INTERNAL_HEADER_EXTENSION).gch
 CXX_OBJECT_EXTENSION ?= $(CXX_SOURCE_EXTENSION).o
 DEP_EXTENSION ?= dep
 
-FLEXCXX_SCANNERSPEC_EXTENSION ?= fc++
-BISONCXX_PARSERSPEC_EXTENSION ?= bc++
+FLEXCXX_SCANNERSPEC_EXTENSION ?= $(call first_extension_found, fc++ fcpp fcxx flexc++ flexcpp flexcxx )
+BISONCXX_PARSERSPEC_EXTENSION ?= $(call first_extension_found, bc++ bcpp bcxx bisonc++ bisoncpp bisoncxx )
 
 # By default, this Makefile does not echo recipe commands. But it can.
 # Try: 'make VERBOSE=1'
@@ -175,10 +179,6 @@ undefine DEP
 QUIET := $(if $(filter true,$(call boolalpha,$(VERBOSE))),,@)
 undefine VERBOSE
 
-# Recursive wildcard to find all files in the current directory and subdirs.
-# Using a $(shell find...) would also work, but depend on the find utility.
-rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
-
 # Acts as 'dir', but may return the empty string instead of './'
 maybe_dir=$(filter-out ./,$(dir $1))
 
@@ -191,9 +191,6 @@ reverse=$(if $(wordlist 2,2,$(1)),$(call reverse,$(wordlist 2,$(words $(1)),$(1)
 # Useful to remove a tree of empty dirs, recursively:
 # Lists dirs recursively, deepest first, with no duplicates.
 rdirs=$(call reverse,$(sort $(foreach dir,$1,$(call rdir,$(dir)))))
-
-# Simply list all files we can find.
-ALL_FILES := $(patsubst ./%,%,$(call rwildcard,.,*))
 
 deps_of = $(addprefix $(DEPDIR)/,$(addsuffix .$(DEP_EXTENSION),$(1)))
 
@@ -209,7 +206,7 @@ CXX_SOURCE_DEPS := $(call deps_of,$(CXX_SOURCES))
 MAIN_REGEX := int[[:space:]]+main[[:space:]]*\(
 
 # Anything that mentions a main function is a program source.
-CXX_PROG_SOURCES := $(shell grep -El '$(MAIN_REGEX)' $(CXX_SOURCES))
+CXX_PROG_SOURCES := $(if $(CXX_SOURCES),$(shell grep -El '$(MAIN_REGEX)' $(CXX_SOURCES)))
 CXX_PROG_OBJECTS := $(patsubst %.$(CXX_SOURCE_EXTENSION),%.$(CXX_OBJECT_EXTENSION),$(CXX_PROG_SOURCES))
 CXX_PROGS := $(CXX_PROG_SOURCES:%.$(CXX_SOURCE_EXTENSION)=%)
 CXX_TESTPROGS := $(filter tests/%,$(CXX_PROGS))
@@ -243,7 +240,7 @@ ALL_DEPS = $(CXX_SOURCE_DEPS) $(CXX_PCH_DEPS) $(FLEXCXX_DEPS) $(BISONCXX_DEPS)
 ###
 
 # Default target: to make all programs, or at least the convenience library.
-all: $(CXX_PROGS) $(CONVLIB_FILE)
+all: $(CXX_PROGS) $(if $(CXX_NONPROG_SOURCES),$(CONVLIB_FILE))
 
 # Assumption: all programs need the convenience library.
 $(CXX_PROGS): $(CONVLIB_FILE)
